@@ -1,0 +1,29 @@
+{
+  "name": "dsh-market-plus",
+  "version": "2.0.0",
+  "private": false,
+  "type": "module",
+  "description": "插件市场Plus·侧栏版：在DSH侧栏挂\"插件市场Plus\"条目，点开即GitHub实时插件榜(topic:dsh-plugin)+任意插件README全文详情(免安装看效果·星/fork/更新/协议统计)+安装任务生成。浏览器端直读GitHub，零服务器装载依赖。",
+  "license": "MIT",
+  "main": "./index.js",
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js"
+  }
+}

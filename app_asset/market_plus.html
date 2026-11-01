@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>插件市场Plus</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui;background:#0f1115;color:#e8e6e3;padding-bottom:140px}
+header{position:sticky;top:0;background:#161a22;padding:12px 16px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #2a2f3a;z-index:5}
+header b{color:#fbbf24;font-size:17px}
+input#q{flex:1;background:#222833;border:1px solid #3a4150;color:#eee;border-radius:8px;padding:9px 12px;font-size:14px}
+.card{background:#1a1f29;margin:10px 12px;border-radius:12px;padding:14px;border:1px solid #262c38}
+.card h3{color:#7cb8ff;font-size:15px;margin-bottom:4px}
+.card p{color:#b9b6b1;font-size:13px;line-height:1.5}
+.card .meta{color:#6b7280;font-size:11px;margin-top:6px}
+.btn{display:inline-block;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;margin:6px 6px 0 0}
+.btn.gold{background:#b45309}
+#detail{position:fixed;inset:0;background:#0f1115;z-index:10;overflow-y:auto;display:none;padding:16px}
+#detail h2{color:#fbbf24;font-size:18px;margin:8px 0}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.stats span{background:#222833;border-radius:6px;padding:4px 10px;font-size:12px;color:#9ca3af}
+.md{font-size:14px;line-height:1.7;color:#d1d5db}
+.md h1,.md h2,.md h3{color:#fff;margin:14px 0 8px}
+.md code{background:#222833;padding:2px 6px;border-radius:4px;color:#fbbf24;font-size:12px}
+.md pre{background:#161a22;padding:12px;border-radius:8px;overflow-x:auto;margin:10px 0}
+.md pre code{background:none;color:#a5d6ff}
+.md a{color:#7cb8ff}
+.md li{margin-left:18px;margin-bottom:4px}
+#status{position:fixed;bottom:0;left:0;right:0;background:#161a22;padding:12px 16px;border-top:1px solid #2a2f3a;z-index:11;display:none}
+#status textarea{width:100%;height:70px;background:#222833;color:#eee;border:1px solid #3a4150;border-radius:8px;padding:8px;font-size:13px}
+.back{background:none;color:#7cb8ff;border:none;font-size:15px}
+</style></head><body>
+<header><b>🧩 市场Plus</b><input id="q" placeholder="搜插件/功能…"></header>
+<div id="list"></div>
+<div id="detail"></div>
+<div id="status"><textarea id="task"></textarea><button class="btn" onclick="sendTask()">交给AI执行</button> <button class="btn" onclick="document.getElementById('status').style.display='none'">取消</button></div>
+<script>
+const SERVER = window.DSH_SERVER || '';
+function md2h(t){
+  let h = t.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  h = h.replace(/```([\s\S]*?)```/g, (m,c)=>'<pre><code>'+c.replace(/^\w*\n/,'')+'</code></pre>');
+  h = h.replace(/`([^`]+)`/g,'<code>$1</code>');
+  h = h.replace(/^### (.*)$/gm,'<h3>$1</h3>').replace(/^## (.*)$/gm,'<h2>$1</h2>').replace(/^# (.*)$/gm,'<h1>$1</h1>');
+  h = h.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+  h = h.replace(/^- (.*)$/gm,'<li>$1</li>');
+  return h;
+}
+async function search(){
+  const q = document.getElementById('q').value.trim();
+  const url = 'https://api.github.com/search/repositories?q=topic:dsh-plugin' + (q? '+' + encodeURIComponent(q):'') + '&sort=updated&per_page=30';
+  document.getElementById('list').innerHTML = '<div class="card">搜索中…</div>';
+  try{
+    const r = await fetch(url, {headers:{'Accept':'application/vnd.github+json'}});
+    const d = await r.json();
+    document.getElementById('list').innerHTML = (d.items||[]).map(x=>
+      `<div class="card"><h3>${x.name}</h3><p>${(x.description||'').replace(/</g,'&lt;')}</p>`+
+      `<div class="meta">★${x.stargazers_count} · 更新${(x.pushed_at||'').slice(0,10)} · ${x.full_name}</div>`+
+      `<button class="btn" onclick="detail('${x.full_name}')">📖 详情(免安装)</button>`+
+      `<button class="btn gold" onclick="prepInstall('${x.full_name}')">⚙ 安装</button></div>`).join('') || '<div class="card">无结果</div>';
+  }catch(e){ document.getElementById('list').innerHTML = '<div class="card">网络失败:'+e+'</div>'; }
+}
+async function detail(repo){
+  const dv = document.getElementById('detail'); dv.style.display='block';
+  dv.innerHTML = '<h2>'+repo+'</h2><div class="card">读取README…</div>';
+  let md='', stats='';
+  try{ const r = await fetch('https://api.github.com/repos/'+repo); const j = await r.json();
+    stats = `★${j.stargazers_count} · ⑂${j.forks_count} · 更新${(j.pushed_at||'').slice(0,10)} · 协议${(j.license&&j.license.spdx_id)||'无'} · ${Math.round((j.size||0)/1024)}KB`; }catch(e){}
+  for(const br of ['main','master']){ try{ const r = await fetch('https://raw.githubusercontent.com/'+repo+'/'+br+'/README.md'); if(r.ok){ md = await r.text(); break; } }catch(e){} }
+  dv.innerHTML = `<button class="back" onclick="dvClose()">← 返回</button><h2>${repo}</h2>`+
+    `<div class="stats"><span>${stats}</span></div>`+
+    `<button class="btn gold" onclick="prepInstall('${repo}')">⚙ 安装(交AI)</button> `+
+    `<a class="btn" target="_blank" href="https://github.com/${repo}">仓库</a>`+
+    `<div class="md">${md?md2h(md):'<div class="card">无README</div>'}</div>`;
+  dv.scrollTop = 0;
+}
+function dvClose(){ document.getElementById('detail').style.display='none'; }
+function prepInstall(repo){
+  document.getElementById('status').style.display='block';
+  document.getElementById('task').value = `请在服务器上安装插件 ${repo}：在 dsh profile 目录执行 pnpm add github:${repo}，把包名加入 dsh.profile.bundles，完成后重启 DSH 并验证已装载。`;
+}
+function sendTask(){
+  const t = document.getElementById('task').value;
+  if(SERVER){ location.href = SERVER + '/?task=' + encodeURIComponent(t); }
+  else { alert('复制以下任务，到主会话发给AI即可：\n\n' + t); }
+}
+document.getElementById('q').addEventListener('change', search);
+search();
+</script></body></html>
